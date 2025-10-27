@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Share2, RotateCcw, Sparkles, Stars } from "lucide-react";
+import { Share2, RotateCcw, Stars } from "lucide-react";
 
 export default function ResultPanel({ data, onReset }) {
   if (!data) return null;
   const { name1, name2, result, emoji, score, message, nickname, letter } = data;
+  const [shared, setShared] = useState(false);
 
   const gradientByLetter = {
     F: "from-sky-500 to-emerald-500",
@@ -15,18 +17,53 @@ export default function ResultPanel({ data, onReset }) {
   };
 
   const shareText = `ConnectMatch says: ${name1} × ${name2} = ${result} ${emoji} — ${score}% match!`;
-  const shareUrl = typeof window !== "undefined" ? window.location.href : "";
+  const shareUrl = typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}${window.location.search}` : "";
+
+  const copyFallback = (text) => {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "absolute";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  };
 
   const handleShare = async () => {
+    const payload = { title: "ConnectMatch", text: shareText, url: shareUrl };
     try {
       if (navigator.share) {
-        await navigator.share({ title: "ConnectMatch", text: shareText, url: shareUrl });
-      } else {
-        await navigator.clipboard.writeText(`${shareText} ${shareUrl}`.trim());
-        alert("Result copied to clipboard!");
+        await navigator.share(payload);
+        setShared(true);
+        setTimeout(() => setShared(false), 1500);
+        return;
       }
     } catch (_) {
-      // ignore
+      // fall through to clipboard
+    }
+
+    const text = `${shareText} ${shareUrl}`.trim();
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        setShared(true);
+        setTimeout(() => setShared(false), 1500);
+      } else {
+        const ok = copyFallback(text);
+        if (ok) {
+          setShared(true);
+          setTimeout(() => setShared(false), 1500);
+        }
+      }
+    } catch (_) {
+      // last resort: do nothing silently
     }
   };
 
@@ -40,7 +77,7 @@ export default function ResultPanel({ data, onReset }) {
         transition={{ type: "spring", stiffness: 120, damping: 16 }}
         className="mt-8"
       >
-        <div className={`relative overflow-hidden rounded-2xl border border-white/15 bg-gradient-to-br ${gradientByLetter[letter]} p-[1px]`}> 
+        <div className={`relative overflow-hidden rounded-2xl border border-white/15 bg-gradient-to-br ${gradientByLetter[letter]} p-[1px]`}>
           <div className="relative rounded-2xl bg-black/40 p-6 md:p-8">
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
@@ -78,6 +115,7 @@ export default function ResultPanel({ data, onReset }) {
 
               <div className="mt-8 flex flex-col md:flex-row gap-3 justify-center">
                 <button
+                  type="button"
                   onClick={onReset}
                   className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-white/15 text-white border border-white/20 hover:bg-white/20"
                 >
@@ -85,11 +123,12 @@ export default function ResultPanel({ data, onReset }) {
                   Try Again
                 </button>
                 <button
+                  type="button"
                   onClick={handleShare}
-                  className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-white to-white/80 text-black font-semibold hover:from-white/90"
+                  className={`inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold transition-colors ${shared ? "bg-emerald-400 text-black" : "bg-gradient-to-r from-white to-white/80 text-black hover:from-white/90"}`}
                 >
                   <Share2 className="w-5 h-5" />
-                  Share Result
+                  {shared ? "Copied!" : "Share Result"}
                 </button>
               </div>
             </motion.div>
